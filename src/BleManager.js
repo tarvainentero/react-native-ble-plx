@@ -193,6 +193,14 @@ export class BleManager {
   }
 
   /**
+   * Get currently bonded devices list (Android only!)
+   * @returns {Promise<LogLevel>} Current log level.
+   */
+  getBondedDevices(): Promise<$Keys<typeof string>> {
+    return this._callPromise(BleModule.getBondedDevices())
+  }
+
+  /**
    * Cancels pending transaction.
    *
    * Few operations such as monitoring characteristic's value changes can be cancelled by a user. Basically every API

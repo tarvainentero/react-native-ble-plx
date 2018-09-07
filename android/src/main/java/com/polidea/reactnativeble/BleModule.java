@@ -2,6 +2,7 @@ package com.polidea.reactnativeble;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.content.Context;
@@ -20,6 +21,7 @@ import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableArray;
+import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 import com.polidea.reactnativeble.converter.RxBleScanResultConverter;
 import com.polidea.reactnativeble.errors.BleError;
@@ -50,6 +52,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -184,6 +187,22 @@ public class BleModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void logLevel(Promise promise) {
         promise.resolve(LogLevel.fromLogLevel(currentLogLevel));
+    }
+
+    @ReactMethod
+    public void getBondedDevices(Promise promise) {
+        Set<RxBleDevice> bonded = rxBleClient.getBondedDevices();
+        WritableArray jsArray=Arguments.createArray();
+
+        if ( bonded != null ) {
+            for(RxBleDevice b : bonded) {
+                WritableMap m = Arguments.createMap();
+                m.putString("name", b.getName());
+                m.putString("macAddress", b.getMacAddress());
+                jsArray.pushMap(m);
+            }
+        }
+        promise.resolve(jsArray);
     }
 
     // Mark: Monitoring state ----------------------------------------------------------------------
@@ -1037,6 +1056,8 @@ public class BleModule extends ReactContextBaseJavaModule {
         }
 
         final BluetoothGattCharacteristic gattCharacteristic = characteristic.getNativeCharacteristic();
+        final int properties = gattCharacteristic.getProperties();
+        final boolean notifications = (properties & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0;
 
         final Subscription subscription = Observable.just(connection)
                 .flatMap(new Func1<RxBleConnection, Observable<Observable<byte[]>>>() {
@@ -1057,7 +1078,17 @@ public class BleModule extends ReactContextBaseJavaModule {
                 .flatMap(new Func1<Observable<byte[]>, Observable<byte[]>>() {
                     @Override
                     public Observable<byte[]> call(Observable<byte[]> observable) {
-                        return observable;
+                        BluetoothGattDescriptor cccDescriptor =
+                                gattCharacteristic.getDescriptor(Characteristic.CLIENT_CHARACTERISTIC_CONFIG_UUID);
+                        if (cccDescriptor == null) {
+                            return observable;
+                        } else {
+                            byte[] enableValue = notifications
+                                    ? BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                                    : BluetoothGattDescriptor.ENABLE_INDICATION_VALUE;
+                            // Keep in mind that every subscription to this observable will initiate another descriptor write
+                            return observable.mergeWith(connection.writeDescriptor(cccDescriptor, enableValue).ignoreElements());
+                        }
                     }
                 })
                 .doOnUnsubscribe(new Action0() {
