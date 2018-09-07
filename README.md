@@ -1,3 +1,13 @@
+
+This is a fork of react-native-ble-plx to fix two issues on Android: 
+## Changes included in this fork
+* Bring back cccDescriptor enableValue from 0.8.0 (BleModule::safeMonitorCharacteristicForDevice)
+* getBondedDevices 
+  * Android: returns list of bonded devices (rxBleClient.getBondedDevices())
+  * iOS: returns empty list
+
+
+## Original Readme
 <p align="center">
   <img alt="react-native-ble-plx" src="docs/logo.png" />
 </p>
